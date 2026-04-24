@@ -2,8 +2,8 @@
 getwd()
 
 #----------------read dataset--------------------------
-factor_df <- read.csv("C:\\Users\\admin\\Documents\\Data_Analysis_2026\\Data\\factor_data.csv")
-imputed_df <- read.csv("C:\\Users\\admin\\Documents\\Data_Analysis_2026\\Data\\imputed_data.csv")
+factor_df <- read.csv("factor_data.csv")
+imputed_df <- read.csv("imputed_data.csv")
 
 # 合并数据
 data_for_analysis <- merge(factor_df, imputed_df, by = "record_id", all = FALSE)
