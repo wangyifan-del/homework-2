@@ -1,0 +1,96 @@
+#--------------------start-------------------------------
+getwd()
+
+#----------------read dataset--------------------------
+factor_df <- read.csv("C:\\Users\\admin\\Documents\\Data_Analysis_2026\\Data\\factor_data.csv")
+imputed_df <- read.csv("C:\\Users\\admin\\Documents\\Data_Analysis_2026\\Data\\imputed_data.csv")
+
+# 合并数据
+data_for_analysis <- merge(factor_df, imputed_df, by = "record_id", all = FALSE)
+str(data_for_analysis)
+
+# 保存合并后数据
+write.csv(data_for_analysis, "data_for_analysis.csv", row.names = FALSE)
+
+#------------------安装包-----------------------
+install.packages("MASS", dependencies = T)
+install.packages("skimr")
+library(MASS)
+library(skimr)
+
+#------------------修复 lipids5 缺失值 ------------------
+# 查看缺失
+sum(is.na(data_for_analysis$lipids5))
+# 用中位数填充（最常用）
+data_for_analysis$lipids5[is.na(data_for_analysis$lipids5)] <- median(data_for_analysis$lipids5, na.rm = TRUE)
+
+#------------------按 outcome 分组（0/1）------------------
+# 分组1：outcome=0
+group0 <- data_for_analysis[data_for_analysis$outcome == 0, ]
+# 分组2：outcome=1
+group1 <- data_for_analysis[data_for_analysis$outcome == 1, ]
+
+# 连续变量列表
+continuous_vars <- c("lipids1", "lipids2", "lipids3", "lipids4", "lipids5",
+                    "hormone1","hormone2","hormone3","hormone4","hormone5","hormone6","hormone7","hormone8",
+                    "antioxidant5")
+
+#------------------核心函数：自动拟合分布 + BIC选择 ------------------
+fit_best_dist <- function(x, var_name, group_name) {
+  x <- na.omit(x)
+  if(length(x)<10) return(NULL)
+  
+  fit_norm <- fitdistr(x, "normal")
+  fit_lnorm <- fitdistr(x, "lognormal")
+  fit_exp <- fitdistr(x, "exponential")
+  
+  bic <- c(BIC(fit_norm), BIC(fit_lnorm), BIC(fit_exp))
+  dists <- c("normal","lognormal","exponential")
+  best_idx <- which.min(bic)
+  best_dist <- dists[best_idx]
+  
+  params <- switch(best_dist,
+                   "normal" = round(fit_norm$estimate,3),
+                   "lognormal" = round(fit_lnorm$estimate,3),
+                   "exponential" = round(fit_exp$estimate,3))
+  
+  desc <- round(c(mean(x), sd(x), min(x), max(x), median(x)),3)
+  
+  data.frame(
+    Variable=var_name,
+    Group=group_name,
+    Mean=desc[1],
+    SD=desc[2],
+    Min=desc[3],
+    Max=desc[4],
+    Median=desc[5],
+    Best_Distribution=best_dist,
+    Parameters=paste(params, collapse=", "),
+    BIC=round(min(bic),3)
+  )
+}
+
+#------------------批量运行：每组每个变量 ------------------
+result_table <- data.frame()
+
+# 运行 group0
+for(v in continuous_vars){
+  res <- fit_best_dist(group0[[v]], v, "outcome=0")
+  result_table <- rbind(result_table, res)
+}
+
+# 运行 group1
+for(v in continuous_vars){
+  res <- fit_best_dist(group1[[v]], v, "outcome=1")
+  result_table <- rbind(result_table, res)
+}
+
+#------------------输出最终表 ------------------
+View(result_table)
+write.csv(result_table, "distribution_result_by_outcome.csv", row.names=F)
+
+#------------------画直方图（按分组） ------------------
+par(mfrow=c(2,2))
+for(v in c("lipids1","lipids2","lipids3","lipids4")){
+  hist(group0[[v]], main=paste(v, "group0"), col="lightblue")
+}
